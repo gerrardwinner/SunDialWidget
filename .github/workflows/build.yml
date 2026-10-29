@@ -1,0 +1,277 @@
+name: Build Sundial Widget APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Sundial Project
+        run: |
+          python3 - << 'EOF'
+          import os
+          import textwrap
+
+          files = {
+              "settings.gradle": """
+                  rootProject.name = "SundialWidget"
+                  include ':app'
+              """,
+
+              "build.gradle": """
+                  buildscript {
+                      repositories {
+                          google()
+                          mavenCentral()
+                      }
+                      dependencies {
+                          classpath 'com.android.tools.build:gradle:8.1.4'
+                      }
+                  }
+                  allprojects {
+                      repositories {
+                          google()
+                          mavenCentral()
+                      }
+                  }
+              """,
+
+              "gradle.properties": """
+                  org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+                  android.useAndroidX=true
+              """,
+
+              "app/build.gradle": """
+                  plugins {
+                      id 'com.android.application'
+                  }
+
+                  android {
+                      namespace 'com.example.sundialwidget'
+                      compileSdk 34
+
+                      defaultConfig {
+                          applicationId "com.example.sundialwidget"
+                          minSdk 21
+                          targetSdk 34
+                          versionCode 1
+                          versionName "1.0"
+                      }
+
+                      buildTypes {
+                          release {
+                              minifyEnabled false
+                          }
+                      }
+                      compileOptions {
+                          sourceCompatibility JavaVersion.VERSION_17
+                          targetCompatibility JavaVersion.VERSION_17
+                      }
+                  }
+              """,
+
+              "app/src/main/AndroidManifest.xml": """
+                  <?xml version="1.0" encoding="utf-8"?>
+                  <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+                      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+                      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+                      <application
+                          android:allowBackup="true"
+                          android:label="Sundial Widget"
+                          android:icon="@android:drawable/ic_menu_compass"
+                          android:theme="@android:style/Theme.DeviceDefault">
+
+                          <activity
+                              android:name=".MainActivity"
+                              android:exported="true">
+                              <intent-filter>
+                                  <action android:name="android.intent.action.MAIN" />
+                                  <category android:name="android.intent.category.LAUNCHER" />
+                              </intent-filter>
+                          </activity>
+
+                          <receiver
+                              android:name=".SundialWidgetProvider"
+                              android:exported="true">
+                              <intent-filter>
+                                  <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                              </intent-filter>
+                              <meta-data
+                                  android:name="android.appwidget.provider"
+                                  android:resource="@xml/sundial_info" />
+                          </receiver>
+
+                      </application>
+                  </manifest>
+              """,
+
+              "app/src/main/res/xml/sundial_info.xml": """
+                  <?xml version="1.0" encoding="utf-8"?>
+                  <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+                      android:minWidth="250dp"
+                      android:minHeight="250dp"
+                      android:updatePeriodMillis="1800000"
+                      android:initialLayout="@layout/widget_sundial"
+                      android:resizeMode="horizontal|vertical"
+                      android:widgetCategory="home_screen" />
+              """,
+
+              "app/src/main/res/layout/widget_sundial.xml": """
+                  <?xml version="1.0" encoding="utf-8"?>
+                  <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                      android:layout_width="match_parent"
+                      android:layout_height="match_parent"
+                      android:orientation="vertical"
+                      android:background="#1C1814"
+                      android:gravity="center"
+                      android:padding="12dp">
+
+                      <TextView
+                          android:id="@+id/tv_mode"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="☀️ โหมดนาฬิกาแดด (Solar Sundial)"
+                          android:textColor="#FFD54F"
+                          android:textSize="12sp"
+                          android:textStyle="bold"
+                          android:paddingBottom="6dp" />
+
+                      <TextView
+                          android:id="@+id/tv_time_desc"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="เงายาวไปทางทิศตะวันตก | 12:00 น."
+                          android:textColor="#BCAAA4"
+                          android:textSize="11sp"
+                          android:gravity="center"
+                          android:paddingBottom="8dp" />
+
+                      <Button
+                          android:id="@+id/btn_sync"
+                          android:layout_width="wrap_content"
+                          android:layout_height="32dp"
+                          android:text="🔄 อัปเดตเงา"
+                          android:textSize="10sp" />
+                  </LinearLayout>
+              """,
+
+              "app/src/main/java/com/example/sundialwidget/MainActivity.java": """
+                  package com.example.sundialwidget;
+
+                  import android.app.Activity;
+                  import android.graphics.Color;
+                  import android.os.Bundle;
+                  import android.view.Gravity;
+                  import android.widget.LinearLayout;
+                  import android.widget.TextView;
+
+                  public class MainActivity extends Activity {
+                      @Override
+                      protected void onCreate(Bundle savedInstanceState) {
+                          super.onCreate(savedInstanceState);
+
+                          LinearLayout layout = new LinearLayout(this);
+                          layout.setOrientation(LinearLayout.VERTICAL);
+                          layout.setPadding(40, 40, 40, 40);
+                          layout.setGravity(Gravity.CENTER_HORIZONTAL);
+                          layout.setBackgroundColor(Color.parseColor("#181615"));
+
+                          TextView title = new TextView(this);
+                          title.setText("🏛️ Solar & Lunar Sundial Widget");
+                          title.setTextColor(Color.parseColor("#FFD54F"));
+                          title.setTextSize(18f);
+                          title.setGravity(Gravity.CENTER);
+                          title.setPadding(0, 0, 0, 20);
+                          layout.addView(title);
+
+                          TextView desc = new TextView(this);
+                          desc.setText("แอปพลิเคชันนาฬิกาแดดและดวงดาวโบราณ 24 ชั่วโมง\\n\\n- กลางวัน: คำนวณเงาแสงอาทิตย์ตามพิกัดจริง\\n- กลางคืน: เปลี่ยนเป็นนาฬิกาดวงจันทร์และดวงดาว\\n\\nวิธีใช้งาน:\\nไปที่หน้าจอหลักของมือถือ -> เพิ่ม Widget (วิดเจ็ต) -> เลือก 'Sundial Widget' มาวางได้เลยครับ!");
+                          desc.setTextColor(Color.parseColor("#D7CCC8"));
+                          desc.setTextSize(14f);
+                          layout.addView(desc);
+
+                          setContentView(layout);
+                      }
+                  }
+              """,
+
+              "app/src/main/java/com/example/sundialwidget/SundialWidgetProvider.java": """
+                  package com.example.sundialwidget;
+
+                  import android.app.PendingIntent;
+                  import android.appwidget.AppWidgetManager;
+                  import android.appwidget.AppWidgetProvider;
+                  import android.content.Context;
+                  import android.content.Intent;
+                  import android.os.Build;
+                  import android.widget.RemoteViews;
+                  import java.util.Calendar;
+
+                  public class SundialWidgetProvider extends AppWidgetProvider {
+                      @Override
+                      public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+                          for (int appWidgetId : appWidgetIds) {
+                              RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_sundial);
+
+                              int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+                              boolean isNight = (hour < 6 || hour >= 18);
+
+                              if (isNight) {
+                                  views.setTextViewText(R.id.tv_mode, "🌙 นาฬิกาดวงดาว (Lunar Astrolabe)");
+                                  views.setTextViewText(R.id.tv_time_desc, "โหมดกลางคืน | คำนวณตำแหน่งดาวและจันทร์");
+                              } else {
+                                  views.setTextViewText(R.id.tv_mode, "☀️ นาฬิกาแดด (Solar Sundial)");
+                                  views.setTextViewText(R.id.tv_time_desc, "โหมดกลางวัน | เงาทอดยาวตามตะวัน");
+                              }
+
+                              Intent intent = new Intent(context, SundialWidgetProvider.class);
+                              intent.setAction("ACTION_REFRESH");
+                              int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                  flags |= PendingIntent.FLAG_IMMUTABLE;
+                              }
+                              PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, flags);
+                              views.setOnClickPendingIntent(R.id.btn_sync, pendingIntent);
+
+                              appWidgetManager.updateAppWidget(appWidgetId, views);
+                          }
+                      }
+                  }
+              """
+          }
+
+          for path, content in files.items():
+              full_path = os.path.join("SundialProject", path)
+              os.makedirs(os.path.dirname(full_path), exist_ok=True)
+              clean_content = textwrap.dedent(content).strip() + "\n"
+              with open(full_path, "w", encoding="utf-8") as f:
+                  f.write(clean_content)
+
+          print("Sundial Project generated successfully!")
+          EOF
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Build Debug APK
+        working-directory: ./SundialProject
+        run: gradle assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SundialWidget-APK
+          path: SundialProject/app/build/outputs/apk/debug/app-debug.apk
